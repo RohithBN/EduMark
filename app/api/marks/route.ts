@@ -1,11 +1,17 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "../auth/[...nextauth]/route";
+import  getServerSession  from "next-auth";
+import { authOptions } from "../auth/[...nextauth]/route";
+import { Session } from "next-auth";
 
 // GET - Fetch marks (can filter by subject or student)
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
+    const session = (await getServerSession(authOptions)) as unknown as Session | null;
+       
+           if (!session || !session.user) {
+             return new NextResponse("Unauthorized", { status: 401 });
+           }
 
     if (!session || !session.user) {
       return new NextResponse("Unauthorized", { status: 401 });
@@ -57,7 +63,11 @@ export async function GET(req: NextRequest) {
 // POST - Create or update a mark
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
+    const session = (await getServerSession(authOptions)) as unknown as Session | null;
+       
+           if (!session || !session.user) {
+             return new NextResponse("Unauthorized", { status: 401 });
+           }
 
     if (!session || !session.user) {
       return new NextResponse("Unauthorized", { status: 401 });

@@ -1,13 +1,19 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "../auth/[...nextauth]/route";
+import  getServerSession  from "next-auth";
+import { authOptions } from "../auth/[...nextauth]/route";
+import { Session } from "next-auth";
 
 // GET - Fetch all subjects
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
+    const session = (await getServerSession(authOptions)) as unknown as Session | null;
     
-    if (!session || !session.user) {
+        if (!session || !session.user) {
+          return new NextResponse("Unauthorized", { status: 401 });
+        }
+    
+    if (!session) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
     
@@ -40,9 +46,13 @@ export async function GET(req: NextRequest) {
 // POST - Create a new subject
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
+    const session = (await getServerSession(authOptions)) as unknown as Session | null;
     
-    if (!session || !session.user) {
+        if (!session || !session.user) {
+          return new NextResponse("Unauthorized", { status: 401 });
+        }
+    
+    if (!session || !session.user.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
     
@@ -66,7 +76,7 @@ export async function POST(req: NextRequest) {
         name,
         code,
         credits: parseInt(credits),
-        teacherId: session.user?.id
+        teacherId: session.user.id
       },
     });
     

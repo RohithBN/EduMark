@@ -1,20 +1,25 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "../../auth/[...nextauth]/route";
+import getServerSession from "next-auth";
+import { authOptions } from "../../auth/[...nextauth]/route";
+import { Session } from "next-auth";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { subjectId: string } }
 ) {
   try {
-    const session = await auth();
+    const session = (await getServerSession(authOptions)) as unknown as Session | null;
     
-    if (!session || !session.user) {
+        if (!session || !session.user) {
+          return new NextResponse("Unauthorized", { status: 401 });
+        }
+    
+    if (!session) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
     
-    // Ensure params is resolved before accessing its properties
-    const subjectId = params.subjectId;
+    const { subjectId } = params;
     
     const subject = await db.subject.findUnique({
       where: { id: subjectId },
@@ -45,9 +50,13 @@ export async function PATCH(
   { params }: { params: { subjectId: string } }
 ) {
   try {
-    const session = await auth();
+    const session = (await getServerSession(authOptions)) as unknown as Session | null;
     
     if (!session || !session.user) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+    
+    if (!session || !session.user.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
     
@@ -89,9 +98,13 @@ export async function DELETE(
   { params }: { params: { subjectId: string } }
 ) {
   try {
-    const session = await auth();
+    const session = (await getServerSession(authOptions)) as unknown as Session | null;
     
     if (!session || !session.user) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+    
+    if (!session || !session.user.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
     
