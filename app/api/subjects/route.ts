@@ -82,9 +82,10 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json(subjects);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching subjects:", error);
-    return NextResponse.json({ message: "Failed to fetch subjects", error: error?.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return NextResponse.json({ message: "Failed to fetch subjects", error: errorMessage }, { status: 500 });
   }
 }
 
@@ -130,9 +131,10 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(subject, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating subject:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     // Add more specific error handling if needed, e.g., Prisma errors
-    return NextResponse.json({ message: "Failed to create subject", error: error?.message }, { status: 500 });
+    return NextResponse.json({ message: "Failed to create subject", error: errorMessage }, { status: 500 });
   }
 }

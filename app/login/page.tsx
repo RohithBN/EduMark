@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react"; // Removed useEffect
 import { useRouter } from "next/navigation";
 // import { signIn } from "next-auth/react"; // Removed next-auth import
 import Link from "next/link";
