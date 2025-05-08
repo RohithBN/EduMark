@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { useSession } from "next-auth/react";
-import React from "react";
 
 interface Student {
   id: string;
@@ -33,9 +31,39 @@ interface Mark {
   };
 }
 
-export default function EnterMarksPage({ params }: { params: { subjectId: string } }) {
-  const { data: session, status } = useSession();
+interface UserSession {
+  id: string;
+  name?: string;
+  email: string;
+  role?: string;
+}
+
+interface SessionData {
+  user: UserSession | null;
+}
+
+const fetchSession = async (): Promise<SessionData | null> => {
+  try {
+    const res = await fetch("/api/auth/session");
+    if (res.ok) {
+      const data = await res.json();
+      return data.user ? { user: data.user } : { user: null };
+    }
+    return { user: null };
+  } catch (error) {
+    console.error("Failed to fetch session:", error);
+    return { user: null };
+  }
+};
+
+export default function EnterMarksPage() {
   const router = useRouter();
+  const params = useParams();
+  const subjectId = params.subjectId as string;
+
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+
   const [subject, setSubject] = useState<Subject | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [marks, setMarks] = useState<Mark[]>([]);
@@ -45,19 +73,31 @@ export default function EnterMarksPage({ params }: { params: { subjectId: string
   const [markValue, setMarkValue] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Use React.use() to unwrap the params object
-  const { subjectId } = params;
+  useEffect(() => {
+    const loadSession = async () => {
+      setIsLoadingSession(true);
+      const sessionData = await fetchSession();
+      setSession(sessionData);
+      setIsLoadingSession(false);
+    };
+    loadSession();
+  }, []);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
+    if (!isLoadingSession && (!session?.user || session.user.role !== "TEACHER")) {
+      toast.error("Unauthorized access.");
+      router.push("/dashboard/subjects");
+    }
+  }, [session, isLoadingSession, router]);
+
+  useEffect(() => {
+    if (isLoadingSession || !session?.user || session.user.role !== "TEACHER") {
       return;
     }
 
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Fetch subject details
         const subjectRes = await fetch(`/api/subjects/${subjectId}`);
         if (!subjectRes.ok) {
           throw new Error("Failed to fetch subject details");
@@ -65,7 +105,6 @@ export default function EnterMarksPage({ params }: { params: { subjectId: string
         const subjectData = await subjectRes.json();
         setSubject(subjectData);
 
-        // Fetch all students
         const studentsRes = await fetch("/api/students");
         if (!studentsRes.ok) {
           throw new Error("Failed to fetch students");
@@ -73,7 +112,6 @@ export default function EnterMarksPage({ params }: { params: { subjectId: string
         const studentsData = await studentsRes.json();
         setStudents(studentsData);
 
-        // Fetch existing marks for this subject
         const marksRes = await fetch(`/api/marks?subjectId=${subjectId}`);
         if (!marksRes.ok) {
           throw new Error("Failed to fetch marks");
@@ -88,10 +126,8 @@ export default function EnterMarksPage({ params }: { params: { subjectId: string
       }
     };
 
-    if (session) {
-      fetchData();
-    }
-  }, [session, status, subjectId, router]);
+    fetchData();
+  }, [session, isLoadingSession, subjectId, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +156,6 @@ export default function EnterMarksPage({ params }: { params: { subjectId: string
 
       const savedMark = await response.json();
 
-      // Update UI
       const studentInfo = students.find(s => s.id === selectedStudentId);
       if (studentInfo) {
         const updatedMarks = [...marks];
@@ -160,7 +195,6 @@ export default function EnterMarksPage({ params }: { params: { subjectId: string
   };
 
   const filteredStudents = students.filter(student => {
-    // Filter out students who already have marks
     const hasExistingMark = marks.some(mark => mark.studentId === student.id);
     if (hasExistingMark && !selectedStudentId) return false;
     if (!searchTerm) return true;
@@ -170,6 +204,14 @@ export default function EnterMarksPage({ params }: { params: { subjectId: string
       student.usn.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
+
+  if (isLoadingSession || !session?.user || session.user.role !== "TEACHER") {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p>Loading or unauthorized...</p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -1,123 +1,108 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect, useState, ReactNode } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
 
-export default function DashboardLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const pathname = usePathname();
-  const { data: session, status } = useSession();
+interface UserSession {
+  id: string;
+  name?: string;
+  email: string;
+  role?: string;
+}
+
+interface SessionData {
+  user: UserSession | null;
+}
+
+const fetchSession = async (): Promise<SessionData | null> => {
+  try {
+    const res = await fetch("/api/auth/session");
+    if (res.ok) {
+      const data = await res.json();
+      return data.user ? { user: data.user } : { user: null };
+    }
+    return { user: null };
+  } catch (error) {
+    console.error("Failed to fetch session:", error);
+    return { user: null };
+  }
+};
+
+const handleSignOut = async (router: ReturnType<typeof useRouter>) => {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  } catch (error) {
+    console.error("Failed to sign out:", error);
+  }
+};
+
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    }
-  }, [status, router]);
+    const loadSession = async () => {
+      setIsLoading(true);
+      const sessionData = await fetchSession();
+      if (!sessionData?.user) {
+        router.push("/login");
+      } else {
+        setSession(sessionData);
+      }
+      setIsLoading(false);
+    };
+    loadSession();
+  }, [router]);
 
-  if (status === "loading") {
+  if (isLoading || !session?.user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex justify-center items-center min-h-screen bg-gray-100">
+        <div className="text-xl font-semibold text-gray-700">Loading...</div>
       </div>
     );
   }
 
-  const handleSignOut = async () => {
-    await signOut({ redirect: false });
-    toast.success("Logged out successfully");
-    router.push("/login");
-  };
-
-  const navItems = [
-    {
-      label: "Dashboard",
-      href: "/dashboard",
-    },
-    {
-      label: "Students",
-      href: "/dashboard/students",
-    },
-    {
-      label: "Subjects",
-      href: "/dashboard/subjects",
-    },
+  const navLinks = [
+    { href: "/dashboard", label: "Dashboard Home" },
+    { href: "/dashboard/students", label: "Students" },
+    { href: "/dashboard/subjects", label: "Subjects" },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation Bar */}
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-blue-600">PCC Marks System</h1>
-              </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                      pathname === item.href
-                        ? "border-blue-500 text-gray-900"
-                        : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center">
-              <div className="hidden sm:flex sm:items-center sm:ml-6">
-                <div className="ml-3 relative flex items-center">
-                  <span className="text-sm font-medium text-gray-700 mr-4">
-                    {session?.user?.name || session?.user?.email}
-                  </span>
-                  <button
-                    onClick={handleSignOut}
-                    className="px-3 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Mobile Navigation */}
-      <div className="sm:hidden py-2 bg-white border-b shadow-sm">
-        <div className="grid grid-cols-4 gap-1">
-          {navItems.map((item) => (
+    <div className="flex h-screen bg-gray-100 text-black">
+      <aside className="w-64 bg-gray-800 text-white p-6 space-y-6">
+        <div className="text-2xl font-semibold">Dashboard</div>
+        <nav className="space-y-2">
+          {navLinks.map((link) => (
             <Link
-              key={item.href}
-              href={item.href}
-              className={`text-center ${
-                pathname === item.href
-                  ? "text-blue-600 font-medium"
-                  : "text-gray-600"
-              } text-xs py-1`}
+              key={link.href}
+              href={link.href}
+              className={`block px-4 py-2 rounded-md hover:bg-gray-700 transition-colors ${
+                pathname === link.href ? "bg-blue-600 font-semibold" : ""
+              }`}
             >
-              {item.label}
+              {link.label}
             </Link>
           ))}
+        </nav>
+        <div className="mt-auto pt-6 border-t border-gray-700">
+          <button
+            onClick={() => handleSignOut(router)}
+            className="w-full text-left px-4 py-2 rounded-md hover:bg-red-600 transition-colors text-red-300 hover:text-white"
+          >
+            Sign Out
+          </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Main Content */}
-      <main>
-        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">{children}</div>
+      <main className="flex-1 p-8 overflow-y-auto">
+        <div className="bg-white p-6 rounded-lg shadow-md min-h-full">
+          {children}
+        </div>
       </main>
     </div>
   );

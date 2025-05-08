@@ -1,38 +1,69 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+// import { useSession } from "next-auth/react"; // Removed next-auth import
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { useSession } from "next-auth/react";
 
-interface Subject {
-  id: string;
-  name: string;
-  code: string;
-  credits: number;
-  teacher: {
-    name: string;
-    email: string;
-  };
-}
-
+// Define types for your data structures
 interface Mark {
   id: string;
   value: number;
-  studentId: string;
-  subjectId: string;
   student: {
     id: string;
     name: string;
     usn: string;
     username: string;
   };
+  // Add other mark properties as needed
 }
 
-export default function SubjectMarksPage({ params }: { params: { subjectId: string } }) {
-  const { data: session, status } = useSession();
+interface Subject {
+  teacher: any;
+  id: string;
+  name: string;
+  code: string;
+  credits: number;
+  // Add other subject properties as needed
+}
+
+// Define a type for the session user if not already globally available
+interface UserSession {
+  id: string;
+  name?: string;
+  email: string;
+  role?: string;
+  // Add any other properties your user object might have
+}
+
+interface SessionData {
+  user: UserSession | null;
+}
+
+const fetchSession = async (): Promise<SessionData | null> => {
+  try {
+    const res = await fetch("/api/auth/session");
+    if (res.ok) {
+      const data = await res.json();
+      return data.user ? { user: data.user } : { user: null };
+    }
+    return { user: null }; // Or handle error appropriately
+  } catch (error) {
+    console.error("Failed to fetch session:", error);
+    return { user: null }; // Or handle error appropriately
+  }
+};
+
+export default function SubjectMarksPage() {
+  const params = useParams();
   const router = useRouter();
+  const subjectId = params.subjectId as string;
+
+  // const { data: session, status: sessionStatus } = useSession(); // Removed next-auth
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+
   const [subject, setSubject] = useState<Subject | null>(null);
   const [marks, setMarks] = useState<Mark[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,11 +77,25 @@ export default function SubjectMarksPage({ params }: { params: { subjectId: stri
     total: 0,
   });
 
-  const { subjectId } = params;
+  useEffect(() => {
+    const loadSession = async () => {
+      setIsLoadingSession(true);
+      const sessionData = await fetchSession();
+      setSession(sessionData);
+      setIsLoadingSession(false);
+    };
+    loadSession();
+  }, []);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
+    if (!isLoadingSession && !session?.user) {
+      // If no session and not loading, redirect to login
       router.push("/login");
+    }
+  }, [session, isLoadingSession, router]);
+
+  useEffect(() => {
+    if (isLoadingSession || !session?.user) {
       return;
     }
 
@@ -102,7 +147,7 @@ export default function SubjectMarksPage({ params }: { params: { subjectId: stri
     if (session) {
       fetchData();
     }
-  }, [session, status, subjectId, router]);
+  }, [session, isLoadingSession, subjectId, router]);
 
   const filteredMarks = searchTerm
     ? marks.filter(
@@ -111,6 +156,15 @@ export default function SubjectMarksPage({ params }: { params: { subjectId: stri
           mark.student.usn.toLowerCase().includes(searchTerm.toLowerCase())
       )
     : marks;
+
+  if (isLoadingSession || !session?.user) {
+    // Show loading indicator or a placeholder while session is being fetched or if no user
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p>Loading session...</p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

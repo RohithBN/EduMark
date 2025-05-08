@@ -1,76 +1,57 @@
-import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import * as z from "zod";
-import bcrypt from "bcrypt";
-
-// Define schema for validation
-const registerSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters" }),
-  email: z.string().email({ message: "Invalid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
-});
+import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcrypt"; // Changed from "@types/bcrypt"
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    
-    // Validate input data
-    const { name, email, password } = registerSchema.parse(body);
-    
-    // Check if user exists
-    const existingUser = await db.user.findUnique({
-      where: { email }
-    });
-    
-    if (existingUser) {
-      return NextResponse.json(
-        { message: "Email already in use" },
-        { status: 409 }
-      );
+    const { email, name, password } = await req.json(); // Changed username to name
+
+    if (!email || !name || !password) { // Changed username to name
+      return new NextResponse("Missing required fields (email, name, password)", { status: 400 }); // Changed username to name
     }
-    
-    // Hash the password
+
+    if (password.length < 6) {
+      return new NextResponse("Password must be at least 6 characters long", { status: 400 });
+    }
+
+    const existingUserByEmail = await db.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUserByEmail) {
+      return new NextResponse("User with this email already exists", { status: 409 });
+    }
+
+    // Assuming you want to check for existing user by name as well.
+    // If your schema doesn't have a unique constraint on 'name', this might not be what you intend.
+    // For now, I'm commenting this out as 'name' is usually not unique like 'username' or 'email'.
+    // If 'name' should be unique, ensure your Prisma schema reflects that with @unique on the 'name' field.
+    /*
+    const existingUserByName = await db.user.findUnique({
+      // where: { name }, // This would cause an error if 'name' is not a unique field in your User model
+    });
+
+    if (existingUserByName) {
+      return new NextResponse("User with this name already exists", { status: 409 });
+    }
+    */
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Create the user
+
     const user = await db.user.create({
       data: {
-        name,
         email,
+        name, // Changed username to name
         password: hashedPassword,
-        // Role will default to TEACHER based on schema
       },
     });
-    
-    // Return success response without exposing password
-    const userResponse = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt
-    };
-    
-    return NextResponse.json(
-      { 
-        message: "User registered successfully",
-        user: userResponse
-      }, 
-      { status: 201 }
-    );
+
+    // Exclude password from the returned user object
+    const { password: _, ...userWithoutPassword } = user;
+
+    return NextResponse.json(userWithoutPassword, { status: 201 });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { message: "Invalid input data", errors: error.errors },
-        { status: 400 }
-      );
-    }
-    
-    console.error("Registration error:", error);
-    return NextResponse.json(
-      { message: "An error occurred during registration" },
-      { status: 500 }
-    );
+    console.error("Error during registration:", error);
+    return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

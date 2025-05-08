@@ -1,42 +1,63 @@
 "use client";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+// import { signIn } from "next-auth/react"; // Removed next-auth import
 import Link from "next/link";
-import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect if already logged in (client-side check)
+  // useEffect(() => {
+  //   const checkSession = async () => {
+  //     try {
+  //       const res = await fetch("/api/auth/session");
+  //       if (res.ok) {
+  //         const data = await res.json();
+  //         if (data.user) {
+  //           router.push("/dashboard");
+  //         }
+  //       } else {
+  //         // Optionally handle non-OK response, e.g., log or ignore
+  //         // console.warn("Session check failed:", res.status);
+  //       }
+  //     } catch (err) {
+  //       console.error("Failed to fetch session:", err);
+  //       // Optionally set a generic error state here if needed
+  //     }
+  //   };
+  //   checkSession();
+  // }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false
+        const data={email,password}
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
 
-      if (result?.error) {
-        toast.error("Invalid credentials");
-        return;
+      if (res.ok) {
+        router.push("/dashboard");
+      } else {
+        const data = await res.json();
+        setError(data.message || "Login failed. Please check your credentials.");
       }
-
-      toast.success("Logged in successfully");
-      router.push("/dashboard");
-      router.refresh();
-    } catch (error) {
-      toast.error("Something went wrong");
-      console.error(error);
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("An unexpected error occurred. Please try again.");
     }
+    setIsLoading(false);
   };
 
   return (
@@ -79,6 +100,8 @@ export default function LoginPage() {
               placeholder="Enter your password"
             />
           </div>
+
+          {error && <p className="text-red-500 text-sm">{error}</p>}
 
           <button
             type="submit"

@@ -1,14 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 
+// Define a type for the session user if not already globally available
+interface UserSession {
+  id: string;
+  name?: string;
+  email: string;
+  role?: string;
+  // Add any other properties your user object might have
+}
+
+interface SessionData {
+  user: UserSession | null;
+}
+
+const fetchSession = async (): Promise<SessionData | null> => {
+  try {
+    const res = await fetch("/api/auth/session");
+    if (res.ok) {
+      const data = await res.json();
+      return data.user ? { user: data.user } : { user: null };
+    }
+    return { user: null }; // Or handle error appropriately
+  } catch (error) {
+    console.error("Failed to fetch session:", error);
+    return { user: null }; // Or handle error appropriately
+  }
+};
+
 export default function NewSubjectPage() {
-  const { data: session } = useSession();
   const router = useRouter();
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -59,10 +87,27 @@ export default function NewSubjectPage() {
     }
   };
 
-  if (!session) {
+  useEffect(() => {
+    const loadSession = async () => {
+      setIsLoadingSession(true);
+      const sessionData = await fetchSession();
+      setSession(sessionData);
+      setIsLoadingSession(false);
+    };
+    loadSession();
+  }, []);
+
+  // Redirect if not authenticated or not a teacher
+  useEffect(() => {
+    if (!isLoadingSession && (!session?.user || session.user.role !== "TEACHER")) {
+      router.push("/dashboard"); // Or to a generic unauthorized page
+    }
+  }, [session, isLoadingSession, router]);
+
+  if (isLoadingSession || !session?.user || session.user.role !== "TEACHER") {
     return (
-      <div className="flex justify-center items-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex justify-center items-center min-h-screen">
+        <p>Loading or unauthorized...</p>
       </div>
     );
   }
